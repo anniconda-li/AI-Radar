@@ -1,0 +1,10 @@
+# Store text consistently for Linux builds and deployments.
+* text=auto eol=lf
+
+# Windows command scripts are conventionally checked out as CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Maven Wrapper shell script must remain executable-friendly on Linux.
+mvnw text eol=lf
+**/mvnw text eol=lf

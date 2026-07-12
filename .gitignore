@@ -1,0 +1,33 @@
+# Local secrets. Keep only documented examples in Git.
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Dependency and build output directories.
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+target/
+**/target/
+coverage/
+**/coverage/
+
+# Runtime and tool caches.
+*.log
+**/*.log
+.eslintcache
+**/.eslintcache
+*.tsbuildinfo
+
+# Editor and operating-system files.
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+.DS_Store
+Thumbs.db
+
+# Local agent workspace metadata.
+.agents/
