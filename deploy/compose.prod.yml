@@ -51,7 +51,7 @@ services:
     image: ghcr.io/anniconda-li/ai-radar/frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:18082:80"
+      - "127.0.0.1:19000:80"
     depends_on:
       backend:
         condition: service_healthy
