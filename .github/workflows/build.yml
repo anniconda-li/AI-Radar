@@ -1,4 +1,4 @@
-name: Build and publish container images
+name: Build, publish and deploy
 
 on:
   push:
@@ -72,3 +72,70 @@ jobs:
           labels: ${{ steps.frontend-meta.outputs.labels }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    name: Deploy to production server
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out deployment configuration
+        uses: actions/checkout@v6
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload production Compose file
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_DEPLOY_PATH: ${{ secrets.SERVER_DEPLOY_PATH }}
+        run: |
+          scp \
+            -i "$HOME/.ssh/id_ed25519" \
+            -P "$SERVER_PORT" \
+            deploy/compose.prod.yml \
+            "$SERVER_USER@$SERVER_HOST:$SERVER_DEPLOY_PATH/compose.prod.yml.next"
+
+      - name: Pull images and update containers
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_DEPLOY_PATH: ${{ secrets.SERVER_DEPLOY_PATH }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$SERVER_PORT" \
+            "$SERVER_USER@$SERVER_HOST" \
+            "cd '$SERVER_DEPLOY_PATH' && \
+             install -m 644 compose.prod.yml.next compose.prod.yml && \
+             rm -f compose.prod.yml.next && \
+             sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/' .env && \
+             docker compose --env-file .env -f compose.prod.yml pull && \
+             docker compose --env-file .env -f compose.prod.yml up -d --remove-orphans --wait --wait-timeout 180 && \
+             docker compose --env-file .env -f compose.prod.yml ps"
+
+      - name: Verify public HTTPS endpoint
+        run: |
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 5 \
+            --retry-delay 5 \
+            https://ai.al-lab.cn/api/providers \
+            > /dev/null
